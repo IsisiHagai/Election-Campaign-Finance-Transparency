@@ -15,7 +15,8 @@
     status: (string-ascii 20),
     total-raised: uint,
     total-spent: uint,
-    created-at: uint
+    created-at: uint,
+    goal: uint
   }
 )
 
@@ -46,7 +47,7 @@
 (define-data-var next-donation-id uint u1)
 (define-data-var next-expense-id uint u1)
 
-(define-public (register-campaign (name (string-ascii 100)))
+(define-public (register-campaign (name (string-ascii 100)) (goal uint))
   (let ((campaign-id (var-get next-campaign-id)))
     (asserts! (is-none (map-get? campaigns { campaign-id: campaign-id })) ERR_CAMPAIGN_EXISTS)
     (map-set campaigns
@@ -57,7 +58,8 @@
         status: "active",
         total-raised: u0,
         total-spent: u0,
-        created-at: stacks-block-height
+        created-at: stacks-block-height,
+        goal: goal
       }
     )
     (var-set next-campaign-id (+ campaign-id u1))
@@ -197,4 +199,10 @@
     next-donation-id: (var-get next-donation-id),
     next-expense-id: (var-get next-expense-id)
   })
+)
+
+(define-read-only (is-goal-reached (campaign-id uint))
+  (let ((campaign (unwrap! (map-get? campaigns { campaign-id: campaign-id }) ERR_CAMPAIGN_NOT_FOUND)))
+    (ok (>= (get total-raised campaign) (get goal campaign)))
+  )
 )
