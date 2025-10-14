@@ -6,6 +6,7 @@
 (define-constant ERR_CAMPAIGN_INACTIVE (err u104))
 (define-constant ERR_DONATION_NOT_FOUND (err u105))
 (define-constant ERR_EXPENSE_NOT_FOUND (err u106))
+(define-constant ERR_CAMPAIGN_EXPIRED (err u107))
 
 (define-map campaigns
   { campaign-id: uint }
@@ -16,9 +17,14 @@
     total-raised: uint,
     total-spent: uint,
     created-at: uint,
-    goal: uint
+    goal: uint,
+    deadline: uint
   }
 )
+
+(define-constant STATUS_ACTIVE "active")
+(define-constant STATUS_PAUSED "paused")
+(define-constant STATUS_CLOSED "closed")
 
 (define-map donations
   { donation-id: uint }
@@ -47,19 +53,21 @@
 (define-data-var next-donation-id uint u1)
 (define-data-var next-expense-id uint u1)
 
-(define-public (register-campaign (name (string-ascii 100)) (goal uint))
+(define-public (register-campaign (name (string-ascii 100)) (goal uint) (deadline uint))
   (let ((campaign-id (var-get next-campaign-id)))
     (asserts! (is-none (map-get? campaigns { campaign-id: campaign-id })) ERR_CAMPAIGN_EXISTS)
+    (asserts! (> deadline stacks-block-height) ERR_INVALID_AMOUNT)
     (map-set campaigns
       { campaign-id: campaign-id }
       {
         name: name,
         candidate: tx-sender,
-        status: "active",
+        status: STATUS_ACTIVE,
         total-raised: u0,
         total-spent: u0,
         created-at: stacks-block-height,
-        goal: goal
+        goal: goal,
+        deadline: deadline
       }
     )
     (var-set next-campaign-id (+ campaign-id u1))
@@ -73,7 +81,7 @@
     (donation-id (var-get next-donation-id))
   )
     (asserts! (> amount u0) ERR_INVALID_AMOUNT)
-    (asserts! (is-eq (get status campaign) "active") ERR_CAMPAIGN_INACTIVE)
+    (asserts! (is-eq (get status campaign) STATUS_ACTIVE) ERR_CAMPAIGN_INACTIVE)
     
     (try! (stx-transfer? amount tx-sender (get candidate campaign)))
     
@@ -132,11 +140,65 @@
 (define-public (close-campaign (campaign-id uint))
   (let ((campaign (unwrap! (map-get? campaigns { campaign-id: campaign-id }) ERR_CAMPAIGN_NOT_FOUND)))
     (asserts! (is-eq tx-sender (get candidate campaign)) ERR_UNAUTHORIZED)
-    (asserts! (is-eq (get status campaign) "active") ERR_CAMPAIGN_INACTIVE)
-    
+    (asserts! (is-eq (get status campaign) STATUS_ACTIVE) ERR_CAMPAIGN_INACTIVE)
+
     (map-set campaigns
       { campaign-id: campaign-id }
-      (merge campaign { status: "closed" })
+      (merge campaign { status: STATUS_CLOSED })
+    )
+    (ok true)
+  )
+)
+
+(define-public (pause-campaign (campaign-id uint))
+  (let ((campaign (unwrap! (map-get? campaigns { campaign-id: campaign-id }) ERR_CAMPAIGN_NOT_FOUND)))
+    (asserts! (is-eq tx-sender (get candidate campaign)) ERR_UNAUTHORIZED)
+    (asserts! (is-eq (get status campaign) STATUS_ACTIVE) ERR_CAMPAIGN_INACTIVE)
+
+    (map-set campaigns
+      { campaign-id: campaign-id }
+      (merge campaign { status: STATUS_PAUSED })
+    )
+    (ok true)
+  )
+)
+
+(define-public (resume-campaign (campaign-id uint))
+  (let ((campaign (unwrap! (map-get? campaigns { campaign-id: campaign-id }) ERR_CAMPAIGN_NOT_FOUND)))
+    (asserts! (is-eq tx-sender (get candidate campaign)) ERR_UNAUTHORIZED)
+    (asserts! (is-eq (get status campaign) STATUS_PAUSED) ERR_CAMPAIGN_INACTIVE)
+
+    (map-set campaigns
+      { campaign-id: campaign-id }
+      (merge campaign { status: STATUS_ACTIVE })
+    )
+    (ok true)
+  )
+)
+
+(define-public (update-campaign (campaign-id uint) (new-name (string-ascii 100)) (new-goal uint))
+  (let ((campaign (unwrap! (map-get? campaigns { campaign-id: campaign-id }) ERR_CAMPAIGN_NOT_FOUND)))
+    (asserts! (is-eq tx-sender (get candidate campaign)) ERR_UNAUTHORIZED)
+    (asserts! (is-eq (get status campaign) STATUS_ACTIVE) ERR_CAMPAIGN_INACTIVE)
+    (asserts! (> new-goal u0) ERR_INVALID_AMOUNT)
+
+    (map-set campaigns
+      { campaign-id: campaign-id }
+      (merge campaign { name: new-name, goal: new-goal })
+    )
+    (ok true)
+  )
+)
+
+(define-public (update-deadline (campaign-id uint) (new-deadline uint))
+  (let ((campaign (unwrap! (map-get? campaigns { campaign-id: campaign-id }) ERR_CAMPAIGN_NOT_FOUND)))
+    (asserts! (is-eq tx-sender (get candidate campaign)) ERR_UNAUTHORIZED)
+    (asserts! (is-eq (get status campaign) STATUS_ACTIVE) ERR_CAMPAIGN_INACTIVE)
+    (asserts! (> new-deadline stacks-block-height) ERR_INVALID_AMOUNT)
+
+    (map-set campaigns
+      { campaign-id: campaign-id }
+      (merge campaign { deadline: new-deadline })
     )
     (ok true)
   )
@@ -204,5 +266,11 @@
 (define-read-only (is-goal-reached (campaign-id uint))
   (let ((campaign (unwrap! (map-get? campaigns { campaign-id: campaign-id }) ERR_CAMPAIGN_NOT_FOUND)))
     (ok (>= (get total-raised campaign) (get goal campaign)))
+  )
+)
+
+(define-read-only (is-campaign-expired (campaign-id uint))
+  (let ((campaign (unwrap! (map-get? campaigns { campaign-id: campaign-id }) ERR_CAMPAIGN_NOT_FOUND)))
+    (ok (> stacks-block-height (get deadline campaign)))
   )
 )

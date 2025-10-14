@@ -15,6 +15,7 @@ This smart contract creates an immutable, public ledger for political donations 
 - 🧾 **Expense Recording**: Campaign expenses with receipt verification
 - 📊 **Real-time Analytics**: Transparency scores and compliance checking
 - 🔍 **Public Auditing**: Anyone can verify campaign finances
+- ⏸️ **Campaign Pause/Resume**: Flexible campaign management with pause and resume capabilities
 - 🛡️ **Immutable Records**: Blockchain-based tamper-proof storage
 
 ## 📋 Contract Functions
@@ -27,6 +28,8 @@ This smart contract creates an immutable, public ledger for political donations 
 | `make-donation` | Make a donation to a campaign |
 | `record-expense` | Record campaign expense (candidate only) |
 | `close-campaign` | Close campaign (candidate only) |
+| `pause-campaign` | Pause campaign (candidate only) |
+| `resume-campaign` | Resume paused campaign (candidate only) |
 
 ### Read-Only Functions
 
@@ -100,6 +103,7 @@ clarinet console
 
 ## 📊 Data Structure
 
+- Status: Active/Paused/Closed
 ### Campaign
 - ID, Name, Candidate
 - Total Raised/Spent
