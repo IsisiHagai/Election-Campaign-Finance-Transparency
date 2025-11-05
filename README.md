@@ -30,6 +30,9 @@ This smart contract creates an immutable, public ledger for political donations 
 | `close-campaign` | Close campaign (candidate only) |
 | `pause-campaign` | Pause campaign (candidate only) |
 | `resume-campaign` | Resume paused campaign (candidate only) |
+| `propose-expense` | Propose a campaign expense for donor voting (candidate only) |
+| `vote-on-expense` | Vote on a proposed expense (donors only) |
+| `finalize-expense-proposal` | Finalize voting and record approved expense (candidate only) |
 
 ### Read-Only Functions
 
@@ -38,6 +41,8 @@ This smart contract creates an immutable, public ledger for political donations 
 | `get-campaign` | Get campaign details |
 | `get-donation` | Get donation information |
 | `get-expense` | Get expense record |
+| `get-expense-proposal` | Get expense proposal details |
+| `get-donor-vote` | Get donor vote on a proposal |
 | `get-campaign-stats` | Get campaign financial statistics |
 | `get-transparency-score` | Calculate transparency score |
 | `is-campaign-compliant` | Check campaign compliance |
@@ -112,8 +117,25 @@ clarinet console
 ### Donations
 - Campaign ID, Donor Address
 - Amount, Timestamp
-- Verification Status
+### Expense Proposals
+- Proposal ID, Campaign ID, Description
+- Amount, Recipient, Receipt Hash
+- Vote Counts (For/Against), Finalized Status
+- Proposer, Creation Timestamp
 
+### Donor Votes
+- Proposal ID, Donor Address
+- Vote (Yes/No)
+- Verification Status
+- ✅ Donor voting rights for expense approval
+- ✅ Majority vote requirement for expense approval
+- ✅ One vote per donor per proposal
+- ✅ Immutable voting records
+
+- 🗳️ **Community Governance**: Donors actively participate in expense decisions
+- 🛡️ **Enhanced Accountability**: Multiple layers of approval for campaign spending
+- 🤝 **Trust Enhancement**: Democratic control over campaign finances
+- 📊 **Transparent Voting**: Public visibility of all expense votes and decisions
 ### Expenses
 - Campaign ID, Description
 - Amount, Recipient
@@ -148,3 +170,7 @@ MIT License
 ---
 
 *Built with ❤️ for democratic transparency*
+
+- 🗳️ **Donor Voting on Expenses**: Donors can vote on proposed campaign expenses, ensuring community oversight and accountability
+- 📋 **Expense Proposals**: Candidates propose expenses which donors can approve or reject through voting
+- 🏛️ **Democratic Expense Control**: Expenses only get recorded if approved by majority donor vote

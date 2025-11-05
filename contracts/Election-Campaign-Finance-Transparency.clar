@@ -7,6 +7,10 @@
 (define-constant ERR_DONATION_NOT_FOUND (err u105))
 (define-constant ERR_EXPENSE_NOT_FOUND (err u106))
 (define-constant ERR_CAMPAIGN_EXPIRED (err u107))
+(define-constant ERR_ALREADY_VOTED (err u108))
+(define-constant ERR_NO_DONATION (err u109))
+(define-constant ERR_PROPOSAL_NOT_FOUND (err u110))
+(define-constant ERR_PROPOSAL_FINALIZED (err u111))
 
 (define-map campaigns
   { campaign-id: uint }
@@ -49,9 +53,33 @@
   }
 )
 
+(define-map expense-proposals
+  { proposal-id: uint }
+  {
+    campaign-id: uint,
+    description: (string-ascii 200),
+    amount: uint,
+    recipient: (string-ascii 100),
+    receipt-hash: (string-ascii 64),
+    proposer: principal,
+    votes-for: uint,
+    votes-against: uint,
+    total-votes: uint,
+    finalized: bool,
+    approved: bool,
+    created-at: uint
+  }
+)
+
+(define-map donor-votes
+  { proposal-id: uint, donor: principal }
+  { vote: bool }
+)
+
 (define-data-var next-campaign-id uint u1)
 (define-data-var next-donation-id uint u1)
 (define-data-var next-expense-id uint u1)
+(define-data-var next-proposal-id uint u1)
 
 (define-public (register-campaign (name (string-ascii 100)) (goal uint) (deadline uint))
   (let ((campaign-id (var-get next-campaign-id)))
@@ -204,6 +232,111 @@
   )
 )
 
+(define-public (propose-expense (campaign-id uint) (description (string-ascii 200)) (amount uint) (recipient (string-ascii 100)) (receipt-hash (string-ascii 64)))
+  (let (
+    (campaign (unwrap! (map-get? campaigns { campaign-id: campaign-id }) ERR_CAMPAIGN_NOT_FOUND))
+    (proposal-id (var-get next-proposal-id))
+  )
+    (asserts! (is-eq tx-sender (get candidate campaign)) ERR_UNAUTHORIZED)
+    (asserts! (> amount u0) ERR_INVALID_AMOUNT)
+    (asserts! (<= (+ (get total-spent campaign) amount) (get total-raised campaign)) ERR_INVALID_AMOUNT)
+
+    (map-set expense-proposals
+      { proposal-id: proposal-id }
+      {
+        campaign-id: campaign-id,
+        description: description,
+        amount: amount,
+        recipient: recipient,
+        receipt-hash: receipt-hash,
+        proposer: tx-sender,
+        votes-for: u0,
+        votes-against: u0,
+        total-votes: u0,
+        finalized: false,
+        approved: false,
+        created-at: stacks-block-height
+      }
+    )
+
+    (var-set next-proposal-id (+ proposal-id u1))
+    (ok proposal-id)
+  )
+)
+
+(define-public (vote-on-expense (proposal-id uint) (vote bool))
+  (let (
+    (proposal (unwrap! (map-get? expense-proposals { proposal-id: proposal-id }) ERR_PROPOSAL_NOT_FOUND))
+    (campaign-id (get campaign-id proposal))
+    (donation (unwrap! (map-get? donations { donation-id: (var-get next-donation-id) }) ERR_NO_DONATION))
+  )
+    (asserts! (is-eq (get donor donation) tx-sender) ERR_UNAUTHORIZED)
+    (asserts! (is-none (map-get? donor-votes { proposal-id: proposal-id, donor: tx-sender })) ERR_ALREADY_VOTED)
+    (asserts! (not (get finalized proposal)) ERR_PROPOSAL_FINALIZED)
+
+    (map-set donor-votes
+      { proposal-id: proposal-id, donor: tx-sender }
+      { vote: vote }
+    )
+
+    (map-set expense-proposals
+      { proposal-id: proposal-id }
+      (merge proposal {
+        votes-for: (if vote (+ (get votes-for proposal) u1) (get votes-for proposal)),
+        votes-against: (if vote (get votes-against proposal) (+ (get votes-against proposal) u1)),
+        total-votes: (+ (get total-votes proposal) u1)
+      })
+    )
+
+    (ok true)
+  )
+)
+
+(define-public (finalize-expense-proposal (proposal-id uint))
+  (let (
+    (proposal (unwrap! (map-get? expense-proposals { proposal-id: proposal-id }) ERR_PROPOSAL_NOT_FOUND))
+    (campaign (unwrap! (map-get? campaigns { campaign-id: (get campaign-id proposal) }) ERR_CAMPAIGN_NOT_FOUND))
+    (expense-id (var-get next-expense-id))
+  )
+    (asserts! (is-eq tx-sender (get candidate campaign)) ERR_UNAUTHORIZED)
+    (asserts! (not (get finalized proposal)) ERR_PROPOSAL_FINALIZED)
+    (asserts! (> (get total-votes proposal) u0) ERR_INVALID_AMOUNT)
+
+    (let ((approved (> (get votes-for proposal) (get votes-against proposal))))
+      (map-set expense-proposals
+        { proposal-id: proposal-id }
+        (merge proposal { finalized: true, approved: approved })
+      )
+
+      (if approved
+        (begin
+          (map-set expenses
+            { expense-id: expense-id }
+            {
+              campaign-id: (get campaign-id proposal),
+              description: (get description proposal),
+              amount: (get amount proposal),
+              recipient: (get recipient proposal),
+              timestamp: stacks-block-height,
+              receipt-hash: (get receipt-hash proposal)
+            }
+          )
+
+          (map-set campaigns
+            { campaign-id: (get campaign-id proposal) }
+            (merge campaign { total-spent: (+ (get total-spent campaign) (get amount proposal)) })
+          )
+
+          (var-set next-expense-id (+ expense-id u1))
+        )
+        true
+      )
+
+      (ok approved)
+    )
+  )
+)
+
 (define-read-only (get-campaign (campaign-id uint))
   (map-get? campaigns { campaign-id: campaign-id })
 )
@@ -214,6 +347,14 @@
 
 (define-read-only (get-expense (expense-id uint))
   (map-get? expenses { expense-id: expense-id })
+)
+
+(define-read-only (get-expense-proposal (proposal-id uint))
+  (map-get? expense-proposals { proposal-id: proposal-id })
+)
+
+(define-read-only (get-donor-vote (proposal-id uint) (donor principal))
+  (map-get? donor-votes { proposal-id: proposal-id, donor: donor })
 )
 
 (define-read-only (get-campaign-stats (campaign-id uint))
@@ -259,7 +400,8 @@
   (ok {
     next-campaign-id: (var-get next-campaign-id),
     next-donation-id: (var-get next-donation-id),
-    next-expense-id: (var-get next-expense-id)
+    next-expense-id: (var-get next-expense-id),
+    next-proposal-id: (var-get next-proposal-id)
   })
 )
 
