@@ -37,7 +37,8 @@
     donor: principal,
     amount: uint,
     timestamp: uint,
-    verified: bool
+    verified: bool,
+    refunded: bool
   }
 )
 
@@ -120,7 +121,8 @@
         donor: tx-sender,
         amount: amount,
         timestamp: stacks-block-height,
-        verified: true
+        verified: true,
+        refunded: false
       }
     )
     

@@ -17,6 +17,7 @@ This smart contract creates an immutable, public ledger for political donations 
 - 🔍 **Public Auditing**: Anyone can verify campaign finances
 - ⏸️ **Campaign Pause/Resume**: Flexible campaign management with pause and resume capabilities
 - 🛡️ **Immutable Records**: Blockchain-based tamper-proof storage
+- 💸 **Donor Refunds**: Donors can request refunds if campaigns fail to meet goals
 
 ## 📋 Contract Functions
 
@@ -33,6 +34,7 @@ This smart contract creates an immutable, public ledger for political donations 
 | `propose-expense` | Propose a campaign expense for donor voting (candidate only) |
 | `vote-on-expense` | Vote on a proposed expense (donors only) |
 | `finalize-expense-proposal` | Finalize voting and record approved expense (candidate only) |
+| `request-refund` | Request refund for donation if campaign closed without reaching goal (donors only) |
 
 ### Read-Only Functions
 
@@ -79,6 +81,12 @@ clarinet deploy
 (contract-call? .election-campaign-finance-transparency get-campaign-stats u1)
 ```
 
+### Request Refund
+
+```clarity
+(contract-call? .election-campaign-finance-transparency request-refund u1)
+```
+
 ## 🏗️ Development
 
 ### Prerequisites
@@ -117,6 +125,7 @@ clarinet console
 ### Donations
 - Campaign ID, Donor Address
 - Amount, Timestamp
+- Refunded Status
 ### Expense Proposals
 - Proposal ID, Campaign ID, Description
 - Amount, Recipient, Receipt Hash
@@ -155,6 +164,7 @@ clarinet console
 - 📈 **Real-time Tracking**: Live campaign finance monitoring
 - 🎯 **Accountability**: Candidates accountable for every dollar
 - 🤝 **Trust Building**: Increases public confidence in elections
+- 🛡️ **Donor Protection**: Refund mechanism safeguards donor investments in unsuccessful campaigns
 
 ## 📄 License
 
